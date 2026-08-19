@@ -1,6 +1,6 @@
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
-#include <Adafruit_BME280.h>
+#include <Adafruit_BMP280.h>
 #include <DHT.h>
 
 // --- Pin Definitions ---
@@ -13,27 +13,32 @@
 #define MQ7_PIN A6        // MQ-7 connected to Analog Pin A6
 #define MQ4_PIN A7        // MQ-4 connected to Analog Pin A7
 
-// I2C Pins A4 (SDA) and A5 (SCL) are automatically handled by the Wire library.
-
 // --- Object Declarations ---
 DHT dht(DHTPIN, DHTTYPE);
-Adafruit_BME280 bme; // I2C
+Adafruit_BMP280 bmp; // I2C for HW-611
 
 void setup() {
-  // Start serial communication at 9600 baud rate
   Serial.begin(9600);
+  while (!Serial); // Wait for Serial Monitor to open
+  
+  // Give sensors a moment to stabilize after power-on
+  delay(1000);
   
   // Initialize DHT11
   dht.begin();
   
-  // Initialize HW-611 (BME280) at I2C address 0x76
-  if (!bme.begin(0x76)) {
-    Serial.println("Error: Could not find a valid BME280 sensor on 0x76!");
-    // We don't halt the program here so the other sensors can still log data
+  // Initialize HW-611 (BMP280) at I2C address 0x76
+  if (bmp.begin(0x76)) {
+    // Configure the sensor with your optimal settings if found
+    bmp.setSampling(Adafruit_BMP280::MODE_NORMAL,     /* Operating Mode. */
+                    Adafruit_BMP280::SAMPLING_X2,     /* Temp. oversampling */
+                    Adafruit_BMP280::SAMPLING_X16,    /* Pressure oversampling */
+                    Adafruit_BMP280::FILTER_X16,      /* Filtering. */
+                    Adafruit_BMP280::STANDBY_MS_500); /* Standby time. */
   }
 
-  // Print the CSV Header
-  Serial.println("DHT_Temp(C),DHT_Hum(%),BME_Temp(C),BME_Hum(%),BME_Press(hPa),MQ3_Alc,MQ4_CH4,MQ7_CO,Benzene,LDR_Light");
+  // Print the CSV Header (Make sure to uncheck "Show timestamp" in Serial Monitor)
+  Serial.println("DHT_Temp(C),DHT_Hum(%),BMP_Temp(C),BMP_Press(hPa),MQ3_Alc,MQ4_CH4,MQ7_CO,Benzene,LDR_Light");
 }
 
 void loop() {
@@ -41,10 +46,9 @@ void loop() {
   float dht_hum = dht.readHumidity();
   float dht_temp = dht.readTemperature();
 
-  // 2. Read HW-611 (BME280) Sensor
-  float bme_temp = bme.readTemperature();
-  float bme_hum = bme.readHumidity();
-  float bme_press = bme.readPressure() / 100.0F; // Convert Pa to hPa
+  // 2. Read HW-611 (BMP280) Sensor
+  float bmp_temp = bmp.readTemperature();
+  float bmp_press = bmp.readPressure() / 100.0F; // Convert Pa to hPa
 
   // 3. Read Analog Sensors
   int mq3_val = analogRead(MQ3_PIN);
@@ -58,18 +62,17 @@ void loop() {
   Serial.print(dht_temp); Serial.print(",");
   Serial.print(dht_hum); Serial.print(",");
   
-  // HW-611 Data
-  Serial.print(bme_temp); Serial.print(",");
-  Serial.print(bme_hum); Serial.print(",");
-  Serial.print(bme_press); Serial.print(",");
+  // HW-611 (BMP280) Data
+  Serial.print(bmp_temp); Serial.print(",");
+  Serial.print(bmp_press); Serial.print(",");
   
   // Analog Gas & Light Data
   Serial.print(mq3_val); Serial.print(",");
   Serial.print(mq4_val); Serial.print(",");
   Serial.print(mq7_val); Serial.print(",");
   Serial.print(benzene_val); Serial.print(",");
-  Serial.println(ldr_val); // println adds the carriage return/newline at the end
+  Serial.println(ldr_val); // println adds the newline at the very end
 
-  // Wait 2 seconds before the next reading (DHT11 requires at least 2 seconds between reads)
+  // Wait 2 seconds before the next reading (DHT11 requires at least 2 seconds)
   delay(2000);
 }
